@@ -1,0 +1,338 @@
+---
+title: "EXAMEN"
+output: flexdashboard::flex_dashboard
+theme: 
+bg: black
+fg: black
+css: styles.css
+runtime: shiny
+---
+
+
+
+```{r global, include=FALSE}
+# load data in 'global' chunk so it can be shared by all users of the dashboard
+# install.packages(c("stringr","urca","caschrono","ggplot2","forecast","imputeTS","readr","shiny","flexdashboard"))
+library(flexdashboard)
+library(shiny)
+library(readr)
+library(RColorBrewer)
+library(geojsonio)
+library(sp)
+library(leaflet)
+library(dplyr)
+library(readxl)
+library(stringr)
+library(DT)
+library(ggplot2)
+library(plotly)
+library(dygraphs)
+library(xts)
+library(raster)
+library(leaflet)
+library(forcats)
+```
+
+```{r}
+#La libraire raster permet de télécharger des cartes avec des subdivisions: Département, communes
+```
+
+
+
+
+```{r }
+resultat_examen <- read_excel("C:/Users/DPCS6481/Documents/examen/resultat_examen.xlsx")
+# sd(resultat_examen$CEP) * 100
+# sd(resultat_examen$BEPC) *100
+# sd(resultat_examen$BAC) *100
+
+resultat_examen$CEP_rang = as.double(resultat_examen$CEP_rang)
+resultat_examen$BEPC_rang = as.double(resultat_examen$BEPC_rang)
+resultat_examen$BAC_rang = as.double(resultat_examen$BAC_rang)
+
+# Calcul du taux moyen
+for (i in 1:nrow(resultat_examen)){
+ 
+resultat_examen$taux_moyen[i] = round(sum(resultat_examen$CEP[i], resultat_examen$BEPC[i], resultat_examen$BAC[i])/3 , 2)
+
+}
+
+resultat_examen= resultat_examen[order(resultat_examen$taux_moyen, decreasing = T),] 
+resultat_examen$rang_moyen = c(1:12)
+
+
+
+resultat_examen$Département <- fct_relevel(resultat_examen$Département, c( "Littoral","Atlantique","Plateau",   "Zou","Mono","Borgou","Kouffo","Ouémé","Donga" ,"Collines", "Atakora" ,"Alibori"   ))
+
+p<-ggplot(data=resultat_examen, aes(x= Département, y=taux_moyen, fill = taux_moyen)) +
+  geom_bar(stat="identity") + coord_flip()
+
+
+#p = resultat_examen %>%  plot_ly(x = ~taux_moyen, y = ~Département, color = ~taux_moyen, type = "bar", colors = "viridis") %>% layout(showlegend = FALSE)
+# L'écart autour de la moyenne entre les départements au niveau du "BAC" approchent les 7% ce qui signifie que l'écart entre le meilleur département et le moins bon pour cet examen est de près de 14%
+#ggplotly(p)
+```
+
+
+
+
+Column {.sidebar .tabset .colored .bgred}
+-----------------------------------------------------------------------
+
+```{r}
+
+selectInput("Variable", label =  "Département" ,
+          choices = c( "Alibori","Atakora", "Atlantique","Borgou","Collines","Donga","Kouffo","Littoral","Mono","Ouémé",    "Plateau","Zou" ), selected = "Alibori")
+```
+
+<center> **Pourcentage_moyen**  </center>
+
+```{r}
+renderGauge({
+  #rate <- computeContactRate(input$region)
+  rate <- paste(round((subset ( resultat_examen, Département == input$Variable)$taux_moyen) ,2))
+  
+  gauge(rate, min = 0, max = 100, symbol = '%', gaugeSectors(
+    danger = c(0, 40), warning = c(40, 75), success = c(75, 100)
+  ))
+})
+```
+
+<center> **Rang**  </center>
+
+```{r}
+reactive({
+ rate <- subset ( resultat_examen, Département == input$Variable)$rang_moyen
+ rate
+})
+```
+
+
+```{r}
+
+exportdata = reactive ({ resultat_examen})
+
+## download link works as documented
+tags$div("Télécharger le fichier global:")
+downloadLink(outputId = "dwnLink", label = "Choisir où le télécharger")
+output$dwnLink <- downloadHandler(
+    filename = function() {paste("resultat_","examen",".csv", sep = "")},
+    content = function(file){
+        write.csv(exportdata(), file)
+    }
+)
+```
+
+
+Column {.tabset .colored .bgred}
+-----------------------------------------------------------------------
+
+### RESUME
+
+```{r}
+
+ggplotly( p
+
+)
+```
+
+
+
+
+
+### CEP
+
+```{r}
+
+
+Benin <-getData('GADM', country='BEN', level=1)
+
+
+renderLeaflet({          
+carte = merge (Benin, resultat_examen, by.x = "NAME_1",by.y = "Département" )
+
+loc = carte$NAME_1
+pal <- colorNumeric("Reds", domain =  carte$CEP)
+labels = paste("<strong> Localisation : </strong>", loc , "<br>",
+              "<strong> Pourcentage(CEP)  : </strong>", paste(carte$CEP , "%") , "<br>") %>% lapply(htmltools::HTML)
+
+
+m1 = leaflet(carte) %>% addProviderTiles("CartoDB.Positron",option = providerTileOptions(opacity =0.99)) %>% addPolygons(
+  fillColor = ~pal(carte$CEP),
+  weight = 2,
+  opacity = 1,
+  color = "white",
+  dashArray = "3",
+  fillOpacity = 0.7,
+  highlight = highlightOptions(
+    weight = 5,
+    color = "#66",
+    dashArray = "",
+    fillOpacity = 0.7,
+    bringToFront = TRUE),
+   label = labels,
+  labelOptions = labelOptions(
+    style = list("font-weight" = "normal", padding = "3px 8px"),
+    textsize = "15px",
+    direction = "auto")
+  ) %>% leaflet::addLegend(pal = pal, values = ~carte$CEP, opacity = 0.7, title = NULL,
+  position = "bottomright")
+
+
+m1
+ })
+```
+
+
+
+### BEPC
+
+```{r}
+
+renderLeaflet({ 
+carte = merge (Benin, resultat_examen, by.x = "NAME_1",by.y = "Département" )
+loc = carte$NAME_1
+pal <- colorNumeric("Reds", domain =  carte$BEPC)
+labels = paste("<strong> Localisation : </strong>", loc , "<br>",
+              "<strong> Pourcentage(BEPC)  : </strong>", paste(carte$BEPC , "%") , "<br>") %>% lapply(htmltools::HTML)
+
+
+m2 = leaflet(carte) %>% addProviderTiles("CartoDB.Positron",option = providerTileOptions(opacity =0.99)) %>% addPolygons(
+  fillColor = ~pal(carte$BEPC),
+  weight = 2,
+  opacity = 1,
+  color = "white",
+  dashArray = "3",
+  fillOpacity = 0.7,
+  highlight = highlightOptions(
+    weight = 5,
+    color = "#66",
+    dashArray = "",
+    fillOpacity = 0.7,
+    bringToFront = TRUE),
+   label = labels,
+  labelOptions = labelOptions(
+    style = list("font-weight" = "normal", padding = "3px 8px"),
+    textsize = "15px",
+    direction = "auto")
+  ) %>% leaflet::addLegend(pal = pal, values = ~carte$BEPC, opacity = 0.7, title = NULL,
+  position = "bottomright")
+
+
+m2})
+```
+
+
+### BAC
+
+```{r}
+
+renderLeaflet({ 
+carte = merge (Benin, resultat_examen, by.x = "NAME_1",by.y = "Département" )
+loc = carte$NAME_1
+pal <- colorNumeric("Reds", domain =  carte$BAC)
+labels = paste("<strong> Localisation : </strong>", loc , "<br>",
+              "<strong> Pourcentage(BAC)  : </strong>", paste(carte$BAC , "%") , "<br>") %>% lapply(htmltools::HTML)
+
+
+m3 = leaflet(carte) %>% addProviderTiles("CartoDB.Positron",option = providerTileOptions(opacity =0.99)) %>% addPolygons(
+  fillColor = ~pal(carte$BAC),
+  weight = 2,
+  opacity = 1,
+  color = "white",
+  dashArray = "3",
+  fillOpacity = 0.7,
+  highlight = highlightOptions(
+    weight = 5,
+    color = "#66",
+    dashArray = "",
+    fillOpacity = 0.7,
+    bringToFront = TRUE),
+   label = labels,
+  labelOptions = labelOptions(
+    style = list("font-weight" = "normal", padding = "3px 8px"),
+    textsize = "15px",
+    direction = "auto")
+  ) %>% leaflet::addLegend(pal = pal, values = ~carte$BAC, opacity = 0.7, title = NULL,
+  position = "bottomright")
+
+
+m3})
+```
+
+### Evolution
+
+
+```{r}
+
+
+Evolution <- read_delim("C:/Users/DPCS6481/Documents/examen/Evolution.csv",  ";", escape_double = FALSE, col_types = cols(Annee = col_date(format = "%d/%m/%Y")), trim_ws = TRUE)
+
+
+don=xts::as.xts( x=Evolution[,2:3], order.by=Evolution$Annee)
+
+#don = data.frame(don)
+
+a = dygraph(don) %>%
+  dySeries("BAC", label = "BAC") %>%
+  dySeries("BEPC", label = "BEPC") %>%
+  dyOptions(stackedGraph = TRUE) %>%
+  dyRangeSelector(height = 20)
+
+a
+
+
+
+
+```
+
+Row
+-----------------------------------------------------------------------
+
+
+```{r}
+DT::renderDataTable({
+resultat_examen
+    })
+```
+
+
+
+
+```{r}
+
+renderLeaflet({
+carte = merge (Benin, resultat_examen, by.x = "NAME_1",by.y = "Département" )
+loc = carte$NAME_1
+pal <- colorNumeric("Reds", domain =  carte$taux_moyen)
+labels = paste("<strong> Localisation : </strong>", loc , "<br>",
+               "<strong> Rang : </strong>", carte$rang_moyen , "<br>",
+              "<strong> Pourcentage(taux_moyen)  : </strong>", paste(round(carte$taux_moyen ,2), "%") , "<br>") %>% lapply(htmltools::HTML)
+
+
+m2 = leaflet(carte) %>% addProviderTiles("CartoDB.Positron",option = providerTileOptions(opacity =0.99)) %>% addPolygons(
+  fillColor = ~pal(carte$taux_moyen),
+  weight = 2,
+  opacity = 1,
+  color = "white",
+  dashArray = "3",
+  fillOpacity = 0.7,
+  highlight = highlightOptions(
+    weight = 5,
+    color = "#66",
+    dashArray = "",
+    fillOpacity = 0.7,
+    bringToFront = TRUE),
+   label = labels,
+  labelOptions = labelOptions(
+    style = list("font-weight" = "normal", padding = "3px 8px"),
+    textsize = "15px",
+    direction = "auto")
+  ) %>% leaflet::addLegend(pal = pal, values = ~carte$taux_moyen, opacity = 0.7, title = NULL,
+  position = "bottomright")
+
+
+m2})
+
+```
+

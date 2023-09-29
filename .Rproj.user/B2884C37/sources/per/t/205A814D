@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1629732998297.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3674515910",
+    "id" : "205A814D",
+    "lastKnownWriteTime" : 1629755830,
+    "last_content_update" : 1629755830112,
+    "path" : "C:/Users/DPCS6481/Desktop/dashboard.Rmd",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "116,1",
+        "scrollLine" : "99"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

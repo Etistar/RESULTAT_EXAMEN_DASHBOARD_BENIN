@@ -1,0 +1,9 @@
+{
+    "path" : "~/DASHBOARD/RESULTAT_EXAMEN_BENIN",
+    "sortOrder" : [
+        {
+            "ascending" : true,
+            "columnIndex" : 2
+        }
+    ]
+}
